@@ -1,4 +1,4 @@
-// VANI AI - Core TypeScript Types
+// Aurora - Core TypeScript Types
 
 // ============ User & Auth Types ============
 export type UserRole = 'child' | 'therapist' | 'parent';

@@ -16,8 +16,8 @@ import type {
   AppSettings,
 } from '@/types';
 
-// VANI AI IndexedDB Database
-export class VaniDatabase extends Dexie {
+// Aurora IndexedDB Database
+export class AuroraDatabase extends Dexie {
   // Tables
   users!: Table<User>;
   childProfiles!: Table<ChildProfile>;
@@ -35,7 +35,7 @@ export class VaniDatabase extends Dexie {
   settings!: Table<AppSettings & { id: string }>;
 
   constructor() {
-    super('vani-ai-db');
+    super('aurora-db');
 
     this.version(1).stores({
       users: 'id, email, phone, role, createdAt',
@@ -56,7 +56,7 @@ export class VaniDatabase extends Dexie {
   }
 }
 
-export const db = new VaniDatabase();
+export const db = new AuroraDatabase();
 
 // Helper functions for common operations
 export const dbHelpers = {

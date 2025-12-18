@@ -15,9 +15,9 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'VANI AI - Speech Assessment',
-        short_name: 'VANI AI',
-        description: 'Multilingual Speech-Language Assessment Platform',
+        name: 'Aurora - Speech Assessment',
+        short_name: 'Aurora',
+        description: 'Multilingual Speech-Language Assessment Platform for Indian Languages',
         theme_color: '#14b8a6',
         background_color: '#f8fafc',
         display: 'standalone',

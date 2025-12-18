@@ -32,7 +32,7 @@ export default function Landing() {
             <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
               <Sparkles className="w-8 h-8 text-primary-foreground" />
             </div>
-            <h1 className="font-display text-4xl text-foreground">VANI AI</h1>
+            <h1 className="font-display text-4xl text-foreground">Aurora</h1>
           </motion.div>
 
           {/* Tagline */}
