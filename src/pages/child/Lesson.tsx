@@ -160,13 +160,53 @@ export default function Lesson() {
 
   const handlePlayAudio = () => {
     if ('speechSynthesis' in window) {
+      // Cancel any ongoing speech
       speechSynthesis.cancel();
+      
+      // Create utterance
       const utterance = new SpeechSynthesisUtterance(currentCard.word);
-      utterance.lang = LANG_MAP[currentLanguage] || 'en-IN';
-      utterance.rate = 0.8;
+      const langCode = LANG_MAP[currentLanguage] || 'en-IN';
+      utterance.lang = langCode;
+      utterance.rate = 0.7; // Slower for children
+      utterance.pitch = 1.1; // Slightly higher pitch
+      utterance.volume = 1;
+      
+      // Try to find a voice for the language
+      const voices = speechSynthesis.getVoices();
+      const matchingVoice = voices.find(v => v.lang.startsWith(langCode.split('-')[0]));
+      if (matchingVoice) {
+        utterance.voice = matchingVoice;
+      }
+      
+      // Add event handlers for debugging
+      utterance.onstart = () => {
+        console.log('Speech started:', currentCard.word);
+      };
+      utterance.onend = () => {
+        console.log('Speech ended');
+      };
+      utterance.onerror = (e) => {
+        console.error('Speech error:', e);
+        toast.error('Could not play audio. Try again.');
+      };
+      
+      // Speak the word
       speechSynthesis.speak(utterance);
+    } else {
+      toast.error('Text-to-speech not supported in this browser.');
     }
   };
+
+  // Load voices when component mounts (needed for some browsers)
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      // Some browsers need voices to be loaded
+      speechSynthesis.getVoices();
+      speechSynthesis.onvoiceschanged = () => {
+        speechSynthesis.getVoices();
+      };
+    }
+  }, []);
 
   const handleRecord = async () => {
     if (!isSpeechRecognitionSupported()) {

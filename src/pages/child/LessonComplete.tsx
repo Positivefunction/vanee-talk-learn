@@ -4,9 +4,10 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Star, Zap, Trophy, Target, CheckCircle, XCircle, Loader2, Sparkles } from 'lucide-react';
+import { Star, Zap, Trophy, Target, CheckCircle, XCircle, Loader2, Sparkles, BarChart3 } from 'lucide-react';
 import { useGameStore, type SessionResults } from '@/stores';
 import { supabase } from '@/integrations/supabase/client';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from 'recharts';
 
 export default function LessonComplete() {
   const navigate = useNavigate();
@@ -16,11 +17,9 @@ export default function LessonComplete() {
   const [isLoadingExercises, setIsLoadingExercises] = useState(false);
 
   useEffect(() => {
-    // Complete the session and get results
     const sessionResults = completeSession();
     if (sessionResults) {
       setResults(sessionResults);
-      // Fetch AI-generated exercises if there are weak areas
       if (sessionResults.weakPhonemes.length > 0) {
         fetchExercises(sessionResults);
       }
@@ -82,8 +81,36 @@ export default function LessonComplete() {
 
   const stars = results.overallAccuracy >= 90 ? 3 : results.overallAccuracy >= 70 ? 2 : 1;
 
+  // Prepare chart data
+  const attemptChartData = results.attempts.map((attempt, idx) => ({
+    name: `Q${idx + 1}`,
+    accuracy: attempt.accuracy,
+    word: attempt.word,
+  }));
+
+  const pieData = [
+    { name: 'Correct', value: results.correctCount, color: 'hsl(var(--success))' },
+    { name: 'Incorrect', value: results.totalQuestions - results.correctCount, color: 'hsl(var(--warning))' },
+  ];
+
+  // Phoneme performance data for radar chart
+  const phonemeStats: Record<string, { total: number; correct: number }> = {};
+  results.attempts.forEach(a => {
+    if (!phonemeStats[a.phoneme]) {
+      phonemeStats[a.phoneme] = { total: 0, correct: 0 };
+    }
+    phonemeStats[a.phoneme].total++;
+    if (a.isCorrect) phonemeStats[a.phoneme].correct++;
+  });
+
+  const radarData = Object.entries(phonemeStats).map(([phoneme, stats]) => ({
+    phoneme,
+    accuracy: Math.round((stats.correct / stats.total) * 100),
+    fullMark: 100,
+  }));
+
   return (
-    <div className="min-h-full flex flex-col px-4 py-6 overflow-auto">
+    <div className="min-h-full flex flex-col px-4 py-6 overflow-auto pb-24">
       {/* Celebration Header */}
       <motion.div 
         initial={{ scale: 0 }} 
@@ -125,34 +152,141 @@ export default function LessonComplete() {
         </div>
       </motion.div>
 
-      {/* Results Summary */}
+      {/* Performance Charts */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
+        transition={{ delay: 0.25 }}
       >
         <Card className="mb-4">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
-              <Target className="w-5 h-5 text-primary" />
-              Your Results
+              <BarChart3 className="w-5 h-5 text-primary" />
+              Accuracy by Question
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Questions</span>
-              <span className="font-bold">{results.totalQuestions}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Correct</span>
-              <span className="font-bold text-success">{results.correctCount}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Need Practice</span>
-              <span className="font-bold text-warning">{results.totalQuestions - results.correctCount}</span>
+          <CardContent>
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={attemptChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                  />
+                  <YAxis 
+                    domain={[0, 100]} 
+                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <Tooltip 
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-popover border border-border rounded-lg p-2 shadow-lg">
+                            <p className="font-medium">{data.word}</p>
+                            <p className="text-sm text-muted-foreground">Accuracy: {data.accuracy}%</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar 
+                    dataKey="accuracy" 
+                    fill="hsl(var(--primary))"
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
+      </motion.div>
+
+      {/* Results Pie Chart */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="grid gap-4 md:grid-cols-2 mb-4"
+      >
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Target className="w-5 h-5 text-primary" />
+              Results Overview
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-40">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={60}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-popover border border-border rounded-lg p-2 shadow-lg">
+                            <p className="font-medium">{payload[0].name}: {payload[0].value}</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Phoneme Radar Chart */}
+        {radarData.length >= 3 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Phoneme Performance</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={radarData}>
+                    <PolarGrid stroke="hsl(var(--border))" />
+                    <PolarAngleAxis 
+                      dataKey="phoneme" 
+                      tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                    />
+                    <PolarRadiusAxis 
+                      domain={[0, 100]} 
+                      tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                    />
+                    <Radar
+                      name="Accuracy"
+                      dataKey="accuracy"
+                      stroke="hsl(var(--primary))"
+                      fill="hsl(var(--primary))"
+                      fillOpacity={0.3}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </motion.div>
 
       {/* Sound Performance */}
