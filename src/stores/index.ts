@@ -30,11 +30,37 @@ export const useAuthStore = create<AuthState>()(
       logout: () => set({ user: null, isAuthenticated: false }),
     }),
     {
-      name: 'vani-auth',
+      name: 'aurora-auth',
       storage: createJSONStorage(() => localStorage),
     }
   )
 );
+
+// Assessment Attempt interface for tracking
+export interface AssessmentAttempt {
+  id: string;
+  word: string;
+  phoneme: string;
+  accuracy: number;
+  isCorrect: boolean;
+  transcript: string;
+  timestamp: number;
+}
+
+// Session Results interface
+export interface SessionResults {
+  sessionId: string;
+  language: string;
+  startTime: number;
+  endTime: number;
+  attempts: AssessmentAttempt[];
+  totalQuestions: number;
+  correctCount: number;
+  overallAccuracy: number;
+  weakPhonemes: string[];
+  strongPhonemes: string[];
+  xpEarned: number;
+}
 
 // Child Game Store
 interface GameState {
@@ -48,6 +74,10 @@ interface GameState {
   hearts: number;
   streak: number;
   xp: number;
+  // Session tracking
+  sessionAttempts: AssessmentAttempt[];
+  sessionStartTime: number | null;
+  lastSessionResults: SessionResults | null;
   // Actions
   setProfile: (profile: ChildProfile | null) => void;
   setLanguage: (language: SupportedLanguage) => void;
@@ -58,45 +88,126 @@ interface GameState {
   updateHearts: (hearts: number) => void;
   updateStreak: (streak: number) => void;
   addXP: (xp: number) => void;
+  addAttempt: (attempt: AssessmentAttempt) => void;
+  completeSession: () => SessionResults | null;
   resetSession: () => void;
 }
 
-export const useGameStore = create<GameState>()((set) => ({
-  currentProfile: null,
-  currentLanguage: 'english',
-  currentPackId: null,
-  currentCardIndex: 0,
-  sessionId: null,
-  isRecording: false,
-  isProcessing: false,
-  hearts: 5,
-  streak: 0,
-  xp: 0,
-  setProfile: (profile) => set({ 
-    currentProfile: profile,
-    hearts: profile?.hearts ?? 5,
-    streak: profile?.streak ?? 0,
-    xp: profile?.xp ?? 0,
-    currentLanguage: profile?.primaryLanguage ?? 'english',
-  }),
-  setLanguage: (language) => set({ currentLanguage: language }),
-  startSession: (packId) => set({ 
-    currentPackId: packId, 
-    currentCardIndex: 0,
-    sessionId: crypto.randomUUID(),
-  }),
-  nextCard: () => set((state) => ({ currentCardIndex: state.currentCardIndex + 1 })),
-  setRecording: (recording) => set({ isRecording: recording }),
-  setProcessing: (processing) => set({ isProcessing: processing }),
-  updateHearts: (hearts) => set({ hearts: Math.max(0, Math.min(5, hearts)) }),
-  updateStreak: (streak) => set({ streak }),
-  addXP: (xpToAdd) => set((state) => ({ xp: state.xp + xpToAdd })),
-  resetSession: () => set({ 
-    currentPackId: null, 
-    currentCardIndex: 0,
-    sessionId: null,
-  }),
-}));
+export const useGameStore = create<GameState>()(
+  persist(
+    (set, get) => ({
+      currentProfile: null,
+      currentLanguage: 'english',
+      currentPackId: null,
+      currentCardIndex: 0,
+      sessionId: null,
+      isRecording: false,
+      isProcessing: false,
+      hearts: 5,
+      streak: 0,
+      xp: 0,
+      sessionAttempts: [],
+      sessionStartTime: null,
+      lastSessionResults: null,
+      
+      setProfile: (profile) => set({ 
+        currentProfile: profile,
+        hearts: profile?.hearts ?? 5,
+        streak: profile?.streak ?? 0,
+        xp: profile?.xp ?? 0,
+        currentLanguage: profile?.primaryLanguage ?? 'english',
+      }),
+      setLanguage: (language) => set({ currentLanguage: language }),
+      startSession: (packId) => set({ 
+        currentPackId: packId, 
+        currentCardIndex: 0,
+        sessionId: crypto.randomUUID(),
+        sessionAttempts: [],
+        sessionStartTime: Date.now(),
+      }),
+      nextCard: () => set((state) => ({ currentCardIndex: state.currentCardIndex + 1 })),
+      setRecording: (recording) => set({ isRecording: recording }),
+      setProcessing: (processing) => set({ isProcessing: processing }),
+      updateHearts: (hearts) => set({ hearts: Math.max(0, Math.min(5, hearts)) }),
+      updateStreak: (streak) => set({ streak }),
+      addXP: (xpToAdd) => set((state) => ({ xp: state.xp + xpToAdd })),
+      
+      addAttempt: (attempt) => set((state) => ({
+        sessionAttempts: [...state.sessionAttempts, attempt],
+      })),
+      
+      completeSession: () => {
+        const state = get();
+        if (!state.sessionId || state.sessionAttempts.length === 0) return null;
+        
+        const attempts = state.sessionAttempts;
+        const correctCount = attempts.filter(a => a.isCorrect).length;
+        const overallAccuracy = Math.round(
+          attempts.reduce((sum, a) => sum + a.accuracy, 0) / attempts.length
+        );
+        
+        // Calculate phoneme stats
+        const phonemeStats: Record<string, { total: number; correct: number }> = {};
+        attempts.forEach(a => {
+          if (!phonemeStats[a.phoneme]) {
+            phonemeStats[a.phoneme] = { total: 0, correct: 0 };
+          }
+          phonemeStats[a.phoneme].total++;
+          if (a.isCorrect) phonemeStats[a.phoneme].correct++;
+        });
+        
+        const weakPhonemes: string[] = [];
+        const strongPhonemes: string[] = [];
+        
+        Object.entries(phonemeStats).forEach(([phoneme, stats]) => {
+          const accuracy = (stats.correct / stats.total) * 100;
+          if (accuracy < 70) {
+            weakPhonemes.push(phoneme);
+          } else {
+            strongPhonemes.push(phoneme);
+          }
+        });
+        
+        const totalXP = attempts.reduce((sum, a) => sum + (a.isCorrect ? Math.floor(a.accuracy / 10) : 0), 0);
+        
+        const results: SessionResults = {
+          sessionId: state.sessionId,
+          language: state.currentLanguage,
+          startTime: state.sessionStartTime || Date.now(),
+          endTime: Date.now(),
+          attempts,
+          totalQuestions: attempts.length,
+          correctCount,
+          overallAccuracy,
+          weakPhonemes,
+          strongPhonemes,
+          xpEarned: totalXP,
+        };
+        
+        set({ lastSessionResults: results });
+        return results;
+      },
+      
+      resetSession: () => set({ 
+        currentPackId: null, 
+        currentCardIndex: 0,
+        sessionId: null,
+        sessionAttempts: [],
+        sessionStartTime: null,
+      }),
+    }),
+    {
+      name: 'aurora-game',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        lastSessionResults: state.lastSessionResults,
+        currentLanguage: state.currentLanguage,
+        xp: state.xp,
+        streak: state.streak,
+      }),
+    }
+  )
+);
 
 // Therapist Store
 interface TherapistState {
@@ -104,25 +215,39 @@ interface TherapistState {
   selectedPackId: string | null;
   isAuthoringMode: boolean;
   currentSessionId: string | null;
+  patientResults: SessionResults[];
   // Actions
   selectPatient: (id: string | null) => void;
   selectPack: (id: string | null) => void;
   setAuthoringMode: (mode: boolean) => void;
   startClinicSession: (sessionId: string) => void;
   endClinicSession: () => void;
+  addPatientResult: (result: SessionResults) => void;
 }
 
-export const useTherapistStore = create<TherapistState>()((set) => ({
-  selectedPatientId: null,
-  selectedPackId: null,
-  isAuthoringMode: false,
-  currentSessionId: null,
-  selectPatient: (id) => set({ selectedPatientId: id }),
-  selectPack: (id) => set({ selectedPackId: id }),
-  setAuthoringMode: (mode) => set({ isAuthoringMode: mode }),
-  startClinicSession: (sessionId) => set({ currentSessionId: sessionId }),
-  endClinicSession: () => set({ currentSessionId: null }),
-}));
+export const useTherapistStore = create<TherapistState>()(
+  persist(
+    (set) => ({
+      selectedPatientId: null,
+      selectedPackId: null,
+      isAuthoringMode: false,
+      currentSessionId: null,
+      patientResults: [],
+      selectPatient: (id) => set({ selectedPatientId: id }),
+      selectPack: (id) => set({ selectedPackId: id }),
+      setAuthoringMode: (mode) => set({ isAuthoringMode: mode }),
+      startClinicSession: (sessionId) => set({ currentSessionId: sessionId }),
+      endClinicSession: () => set({ currentSessionId: null }),
+      addPatientResult: (result) => set((state) => ({
+        patientResults: [...state.patientResults, result],
+      })),
+    }),
+    {
+      name: 'aurora-therapist',
+      storage: createJSONStorage(() => localStorage),
+    }
+  )
+);
 
 // Settings Store
 interface SettingsState {
@@ -138,7 +263,7 @@ export const useSettingsStore = create<SettingsState>()(
         set((state) => ({ settings: { ...state.settings, ...newSettings } })),
     }),
     {
-      name: 'vani-settings',
+      name: 'aurora-settings',
       storage: createJSONStorage(() => localStorage),
     }
   )
@@ -152,12 +277,12 @@ interface FeatureFlagsState {
 
 export const useFeatureFlagsStore = create<FeatureFlagsState>()((set) => ({
   flags: {
-    cloudSync: false, // MVP: disabled
-    asrProduction: false, // MVP: use Web Speech API
-    llmSoap: false, // MVP: templates only
-    llmTherapyPlan: false, // MVP: templates only
-    teletherapy: true, // MVP: basic audio
-    parentCommunity: true, // MVP: local only
+    cloudSync: false,
+    asrProduction: false,
+    llmSoap: true, // Now enabled with Lovable AI
+    llmTherapyPlan: true, // Now enabled with Lovable AI
+    teletherapy: true,
+    parentCommunity: true,
   },
   setFlags: (newFlags) => 
     set((state) => ({ flags: { ...state.flags, ...newFlags } })),
@@ -192,7 +317,6 @@ export const useUIStore = create<UIState>()((set) => ({
     set((state) => ({ 
       toastQueue: [...state.toastQueue, { id, message, type }] 
     }));
-    // Auto-remove after 3 seconds
     setTimeout(() => {
       set((state) => ({ 
         toastQueue: state.toastQueue.filter((t) => t.id !== id) 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useGameStore } from '@/stores';
+import { useGameStore, type AssessmentAttempt } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Mic, Volume2, ChevronRight, X, MicOff } from 'lucide-react';
 import { getAssessmentWordsForLanguage } from '@/data/assessmentWords';
@@ -62,7 +62,18 @@ const isSpeechRecognitionSupported = (): boolean => {
 export default function Lesson() {
   const { packId } = useParams();
   const navigate = useNavigate();
-  const { isRecording, setRecording, addXP, updateHearts, hearts, currentLanguage } = useGameStore();
+  const { 
+    isRecording, 
+    setRecording, 
+    addXP, 
+    updateHearts, 
+    hearts, 
+    currentLanguage,
+    addAttempt,
+    startSession,
+    sessionId,
+  } = useGameStore();
+  
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showFeedback, setShowFeedback] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
@@ -77,6 +88,13 @@ export default function Lesson() {
   const cards = getAssessmentWordsForLanguage(currentLanguage);
   const currentCard = cards[currentIndex];
   const progress = ((currentIndex + 1) / cards.length) * 100;
+
+  // Initialize session on mount
+  useEffect(() => {
+    if (!sessionId && packId) {
+      startSession(packId);
+    }
+  }, [sessionId, packId, startSession]);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -142,9 +160,7 @@ export default function Lesson() {
 
   const handlePlayAudio = () => {
     if ('speechSynthesis' in window) {
-      // Cancel any ongoing speech
       speechSynthesis.cancel();
-      
       const utterance = new SpeechSynthesisUtterance(currentCard.word);
       utterance.lang = LANG_MAP[currentLanguage] || 'en-IN';
       utterance.rate = 0.8;
@@ -159,23 +175,17 @@ export default function Lesson() {
     }
 
     if (isListening) {
-      // Stop recording
       recognitionRef.current?.stop();
       return;
     }
 
-    // Reset state
     setTranscript('');
     setErrorMessage('');
 
     try {
-      // Request microphone permission first
       await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Start recognition
       recognitionRef.current?.start();
       
-      // Auto-stop after 5 seconds
       setTimeout(() => {
         if (recognitionRef.current && isListening) {
           recognitionRef.current.stop();
@@ -197,13 +207,25 @@ export default function Lesson() {
       setIsCorrect(correct);
       setShowFeedback(true);
       
+      // Track this attempt
+      const attempt: AssessmentAttempt = {
+        id: crypto.randomUUID(),
+        word: currentCard.word,
+        phoneme: currentCard.phoneme,
+        accuracy: calculatedAccuracy,
+        isCorrect: correct,
+        transcript: transcript,
+        timestamp: Date.now(),
+      };
+      addAttempt(attempt);
+      
       if (correct) {
         addXP(Math.floor(calculatedAccuracy / 10));
       } else {
         updateHearts(Math.max(0, hearts - 1));
       }
     }
-  }, [isListening, transcript, showFeedback, currentCard.word, addXP, updateHearts, hearts]);
+  }, [isListening, transcript, showFeedback, currentCard, addXP, updateHearts, hearts, addAttempt]);
 
   const handleNext = () => {
     setShowFeedback(false);
@@ -275,13 +297,11 @@ export default function Lesson() {
                   {isCorrect ? 'Great job!' : 'Keep trying!'}
                 </h3>
                 
-                {/* Accuracy score */}
                 <div className="mb-4">
                   <div className="text-4xl font-bold text-primary">{accuracy}%</div>
                   <p className="text-sm text-muted-foreground">Accuracy</p>
                 </div>
 
-                {/* What was detected */}
                 <div className="bg-muted/50 rounded-xl p-3 mb-4">
                   <p className="text-xs text-muted-foreground mb-1">You said:</p>
                   <p className="font-medium text-foreground">{transcript}</p>
