@@ -14,6 +14,7 @@ import { ParentLayout } from "@/layouts/ParentLayout";
 
 // Auth Pages
 import Landing from "@/pages/Landing";
+import Auth from "@/pages/Auth";
 import RoleSelect from "@/pages/RoleSelect";
 import ChildSetup from "@/pages/child/ChildSetup";
 
@@ -24,6 +25,7 @@ import Lesson from "@/pages/child/Lesson";
 import LessonComplete from "@/pages/child/LessonComplete";
 import ChildRewards from "@/pages/child/Rewards";
 import ChildProfile from "@/pages/child/Profile";
+import ChildMaterials from "@/pages/child/Materials";
 
 // Therapist Pages
 import TherapistDashboard from "@/pages/therapist/Dashboard";
@@ -34,6 +36,7 @@ import PackBuilder from "@/pages/therapist/PackBuilder";
 import SessionRunner from "@/pages/therapist/SessionRunner";
 import SessionReview from "@/pages/therapist/SessionReview";
 import Reports from "@/pages/therapist/Reports";
+import Teletherapy from "@/pages/therapist/Teletherapy";
 
 // Parent Pages
 import ParentDashboard from "@/pages/parent/Dashboard";
@@ -97,6 +100,7 @@ const App = () => {
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Landing />} />
+            <Route path="/auth" element={<Auth />} />
             <Route path="/role-select" element={<RoleSelect />} />
             <Route path="/child-setup" element={<ChildSetup />} />
 
@@ -113,6 +117,7 @@ const App = () => {
               <Route path="lesson/:packId/complete" element={<LessonComplete />} />
               <Route path="rewards" element={<ChildRewards />} />
               <Route path="profile" element={<ChildProfile />} />
+              <Route path="materials" element={<ChildMaterials />} />
             </Route>
 
             {/* Therapist Routes */}
@@ -129,6 +134,7 @@ const App = () => {
               <Route path="session/:sessionId" element={<SessionRunner />} />
               <Route path="session/:sessionId/review" element={<SessionReview />} />
               <Route path="reports" element={<Reports />} />
+              <Route path="teletherapy" element={<Teletherapy />} />
             </Route>
 
             {/* Parent Routes */}
